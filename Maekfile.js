@@ -158,6 +158,10 @@ const show_scene_names = [
 	maek.CPP('ShowSceneMode.cpp')
 ];
 
+const load_rhythm_names = [
+	maek.CPP('load_txt.cpp')
+];
+
 //the '[exeFile =] LINK(objFiles, exeFileBase, [, options])' links an array of objects into an executable:
 // objFiles: array of objects to link
 // exeFileBase: name of executable file to produce
@@ -165,9 +169,10 @@ const show_scene_names = [
 const game_exe = maek.LINK([...game_names, ...common_names], 'dist/game');
 const show_meshes_exe = maek.LINK([...show_meshes_names, ...common_names], 'scenes/show-meshes');
 const show_scene_exe = maek.LINK([...show_scene_names, ...common_names], 'scenes/show-scene');
+const load_rhythm_exe = maek.LINK([...load_rhythm_names, ...common_names], 'assets/load-rhythm');
 
 //set the default target to the game (and copy the readme files):
-maek.TARGETS = [game_exe, show_meshes_exe, show_scene_exe, ...copies];
+maek.TARGETS = [game_exe, show_meshes_exe, show_scene_exe, load_rhythm_exe, ...copies];
 
 //the '[targets =] RULE(targets, prerequisites[, recipe])' rule defines a Makefile-style task
 // targets: array of targets the task produces (can include both files and ':abstract targets')

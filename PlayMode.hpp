@@ -8,6 +8,10 @@
 #include <vector>
 #include <deque>
 
+#include <glm/glm.hpp>
+
+#define MAX_BEATS_IN_SONG 5000
+
 struct PlayMode : Mode {
 	PlayMode();
 	virtual ~PlayMode();
@@ -28,21 +32,75 @@ struct PlayMode : Mode {
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
-	//hexapod leg to wobble:
-	Scene::Transform *hip = nullptr;
-	Scene::Transform *upper_leg = nullptr;
-	Scene::Transform *lower_leg = nullptr;
-	glm::quat hip_base_rotation;
-	glm::quat upper_leg_base_rotation;
-	glm::quat lower_leg_base_rotation;
-	float wobble = 0.0f;
+	// Rhythm representation
+	struct RhythmBeats {
+		std::uint32_t bpm;
+		bool beats[MAX_BEATS_IN_SONG];
+		uint32_t beat_count;
+	};
 
-	glm::vec3 get_leg_tip_position();
+	// Rhythm for the current game
+	RhythmBeats rhythm;
+	uint32_t beat_index = 0;
 
-	//music coming from the tip of the leg (as a demonstration):
-	std::shared_ptr< Sound::PlayingSample > leg_tip_loop;
+	// Model drawables
+	Scene::Drawable *head = nullptr;
+	Scene::Drawable *body = nullptr;
+	Scene::Drawable *apple = nullptr;
+
+	Scene::Transform *snake_head = nullptr;
+
+	// Snake game logic
+	enum Direction {
+		DirUp, DirDown, DirLeft, DirRight
+	};
+
+	struct DirectionPivot {
+		glm::vec3 pos;
+		Direction dir;
+		DirectionPivot *next;
+	};
+
+	std::deque<DirectionPivot*> move_buffer;
+
+	struct SnakeBody {
+		Direction dir;
+		Scene::Transform *transform;
+		DirectionPivot *next_pivot;
+	};
+
+	std::deque<SnakeBody*> snake_body;
+
+	float snake_speed = 10;
+
+	std::list<Scene::Drawable*> apples;
+
+	// Music coming from the tip of the leg (as a demonstration):
+	std::shared_ptr< Sound::PlayingSample > song_loop;
 	
+	const float min_pos_val = -19;
+	const float max_pos_val = 19;
+
 	//camera:
 	Scene::Camera *camera = nullptr;
 
+	/// Functions
+
+	// Generates a random float between lo and hi
+	float rand_float(float lo, float hi);
+
+	// Find the distance along the direction
+	float dir_distance(Direction dir, glm::vec3 pos1, glm::vec3 pos2);
+
+	// Spawn an apple at a random position on the map
+	void spawn_apple();
+
+	// Checks if collision occurs between the two given transforms
+	bool check_collision(Scene::Transform *obj1, Scene::Transform *obj2, float bound);
+
+	// Checks if snake head eats the apple; if so, grows the snake body
+	void check_snake_eat();
+
+	// Checks if snake head hits itself; if so, lose game
+	void check_snake_collision();
 };
