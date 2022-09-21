@@ -328,7 +328,7 @@ void PlayMode::update(float elapsed) {
 	// Move snake:
 	{
 		bool swap_dir = false;
-		Direction new_dir;
+		Direction new_dir = DirLeft;
 		if (left.pressed && !right.pressed && !down.pressed && !up.pressed && snake_body.front()->dir != DirRight) {
 			swap_dir = true;
 			new_dir = DirLeft;
