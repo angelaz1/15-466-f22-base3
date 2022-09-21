@@ -2,7 +2,7 @@
 
 **Author:** Angela Zhang
 
-**Design:** SnakeBop is a rhythm-based variation of the classic game snake. Apples will spawn/despawn according to the BGM, and you must eat to avoid starving to death!
+**Design:** SnakeBop is a rhythm-based variation of the classic game snake. Apples will spawn/despawn according to the BGM, and you must eat to avoid starving to death!!
 
 **Screen Shot:**
 
