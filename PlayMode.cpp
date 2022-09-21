@@ -169,7 +169,7 @@ void PlayMode::spawn_apple() {
 
 	apple_transform->position = glm::vec3(random_xpos, random_ypos, apple_min_z);
 
-	float apple_rot = rand_float(0.0f, 2.0f * M_PI);
+	float apple_rot = rand_float(0.0f, 2.0f * (float)M_PI);
 	apple_transform->rotation = glm::quat(std::cos(apple_rot / 2.0f), 0.0f, 0.0f, std::sin(apple_rot / 2.0f));
 	apple_transform->scale = apple->transform->scale;
 
