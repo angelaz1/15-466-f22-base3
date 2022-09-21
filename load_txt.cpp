@@ -33,6 +33,7 @@ bool read_txt(std::string file_path, PlayMode::RhythmBeats *rhythm) {
                 index++;
             }
         }
+        rhythm->beat_count = index;
 
         txtfile.close();
     }

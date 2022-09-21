@@ -34,12 +34,11 @@ Load< Scene > snake_scene(LoadTagDefault, []() -> Scene const * {
 		drawable.pipeline.type = mesh.type;
 		drawable.pipeline.start = mesh.start;
 		drawable.pipeline.count = mesh.count;
-
 	});
 });
 
-Load< Sound::Sample > dusty_floor_sample(LoadTagDefault, []() -> Sound::Sample const * {
-	return new Sound::Sample(data_path("dusty-floor.opus"));
+Load< Sound::Sample > snake_bop_sample(LoadTagDefault, []() -> Sound::Sample const * {
+	return new Sound::Sample(data_path("snake-bop.wav"));
 });
 
 PlayMode::PlayMode() : scene(*snake_scene) {
@@ -66,10 +65,14 @@ PlayMode::PlayMode() : scene(*snake_scene) {
 		}
 		else if (drawable.transform->name == "body") body = &drawable;
 		else if (drawable.transform->name == "apple") apple = &drawable;
+		else if (drawable.transform->name == "stem") stem = &drawable;
+		else if (drawable.transform->name == "leaf") leaf = &drawable;
 	}
 	if (head == nullptr) throw std::runtime_error("Head not found.");
 	if (body == nullptr) throw std::runtime_error("Body not found.");
 	if (apple == nullptr) throw std::runtime_error("Apple not found.");
+	if (stem == nullptr) throw std::runtime_error("Stem not found.");
+	if (leaf == nullptr) throw std::runtime_error("Leaf not found.");
 
 	// Setup snake transform
 	snake_body = std::deque<SnakeBody*>();
@@ -86,19 +89,16 @@ PlayMode::PlayMode() : scene(*snake_scene) {
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
 	camera = &scene.cameras.front();
 
-	apples = std::list<Scene::Drawable*>();
-	spawn_apple();
-
-	//start music loop playing:
-	// (note: position will be over-ridden in update())
-	// song_loop = Sound::loop_3D(*dusty_floor_sample, 1.0f, get_leg_tip_position(), 10.0f);
+	apples = std::list<Apple*>();
+	if (rhythm.beats[beat_index]) {
+		spawn_apple();
+	}
 }
 
 PlayMode::~PlayMode() {
 }
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
-
 	if (evt.type == SDL_KEYDOWN) {
 		if (evt.key.keysym.sym == SDLK_ESCAPE) {
 			SDL_SetRelativeMouseMode(SDL_FALSE);
@@ -165,15 +165,45 @@ void PlayMode::spawn_apple() {
 	float random_ypos = rand_float(min_pos_val, max_pos_val);
 
 	Scene::Drawable new_apple = Scene::Drawable(*apple);
-	Scene::Transform *transform = new Scene::Transform();
+	Scene::Transform *apple_transform = new Scene::Transform();
 
-	transform->position = glm::vec3(random_xpos, random_ypos, 0);
-	transform->rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	transform->scale = apple->transform->scale;
+	apple_transform->position = glm::vec3(random_xpos, random_ypos, apple_min_z);
 
-	new_apple.transform = transform;
+	float apple_rot = rand_float(0.0f, 2.0f * M_PI);
+	apple_transform->rotation = glm::quat(std::cos(apple_rot / 2.0f), 0.0f, 0.0f, std::sin(apple_rot / 2.0f));
+	apple_transform->scale = apple->transform->scale;
+
+	new_apple.transform = apple_transform;
 	scene.drawables.push_back(new_apple);
-	apples.push_back(&scene.drawables.back());
+
+	Apple *apple_info = new Apple();
+	apple_info->drawable = &scene.drawables.back();
+	apple_info->life_timer = 0.0f;
+	apples.push_back(apple_info); 
+
+	Scene::Drawable new_stem = Scene::Drawable(*stem);
+	Scene::Transform *stem_transform = new Scene::Transform();
+
+	stem_transform->parent = apple_transform;
+	stem_transform->position = stem->transform->position;
+	stem_transform->rotation = stem->transform->rotation;
+	stem_transform->scale = stem->transform->scale;
+
+	new_stem.transform = stem_transform;
+	scene.drawables.push_back(new_stem);
+	apple_info->stem_drawable = &scene.drawables.back();
+
+	Scene::Drawable new_leaf = Scene::Drawable(*leaf);
+	Scene::Transform *leaf_transform = new Scene::Transform();
+
+	leaf_transform->parent = stem_transform;
+	leaf_transform->position = leaf->transform->position;
+	leaf_transform->rotation = leaf->transform->rotation;
+	leaf_transform->scale = leaf->transform->scale;
+
+	new_leaf.transform = leaf_transform;
+	scene.drawables.push_back(new_leaf);
+	apple_info->leaf_drawable = &scene.drawables.back();
 }
 
 bool PlayMode::check_collision(Scene::Transform *obj1, Scene::Transform *obj2, float bound) {
@@ -187,19 +217,25 @@ bool PlayMode::check_collision(Scene::Transform *obj1, Scene::Transform *obj2, f
 
 void PlayMode::check_snake_eat() {
 	// Knowing that the snakes and apple sizes are all 1
-	std::vector<Scene::Drawable*> to_delete = std::vector<Scene::Drawable*>();
+	std::vector<Apple*> to_delete = std::vector<Apple*>();
 
-	for (auto &apple_draw : apples) {
-		Scene::Transform *apple_t = apple_draw->transform;
+	for (auto &apple_info : apples) {
+		Scene::Transform *apple_t = apple_info->drawable->transform;
 
-		if (!check_collision(snake_head, apple_t, 1)) {
+		if (!check_collision(snake_head, apple_t, 0.8f)) {
 			// No intersection
 			continue;
 		}
 
-		std::cout << "Intersection!\n";
 		// Intersection - remove apple
-		to_delete.push_back(apple_draw);
+		to_delete.push_back(apple_info);
+
+		// Reduce hunger
+		hunger = std::max(hunger - apple_hunger_restore, 0.0f);
+
+		// Increase speed and rate of hunger
+		snake_speed += 0.05f;
+		hunger_growth_rate += 0.005f;
 
 		// Add to snake body
 		Scene::Drawable new_body = Scene::Drawable(*body);
@@ -235,11 +271,7 @@ void PlayMode::check_snake_eat() {
 		snake_body.push_back(snake_body_move); 
 	}
 
-	for (auto &apple_draw : to_delete) {
-		scene.drawables.remove_if([apple_draw](auto &draw){ return draw.transform == apple_draw->transform; });
-		apples.remove(apple_draw);
-		spawn_apple(); //TODO: REMOVE
-	}
+	remove_apples(to_delete);
 }
 
 void PlayMode::check_snake_collision() {
@@ -248,40 +280,50 @@ void PlayMode::check_snake_collision() {
 		Scene::Transform *snake_part_t = snake_part->transform;
 
 		if (snake_part_t == snake_head) {
+			if (std::abs(snake_head->position.x) > max_pos_val || std::abs(snake_head->position.y) > max_pos_val) {
+				gameOver = true;
+				break;
+			}
 			// Don't check head against head
 			continue;
 		}
 
-		if (!check_collision(snake_head, snake_part_t, 0.5f)) {
+		if (!check_collision(snake_head, snake_part_t, 0.4f)) {
 			// No intersection
 			continue;
 		}
 
-		std::cout << "Dead!!\n";
+		gameOver = true;
+	}
+}
+
+void PlayMode::remove_apples(std::vector<Apple*> to_delete) {
+	for (auto &apple_info : to_delete) {
+		scene.drawables.remove_if([apple_info](auto &draw){ return draw.transform == apple_info->drawable->transform; });
+		scene.drawables.remove_if([apple_info](auto &draw){ return draw.transform == apple_info->stem_drawable->transform; });
+		scene.drawables.remove_if([apple_info](auto &draw){ return draw.transform == apple_info->leaf_drawable->transform; });
+		apples.remove(apple_info);
 	}
 }
 
 void PlayMode::update(float elapsed) {
+	if (gameOver) return;
 
-	//slowly rotates through [0,1):
-	// wobble += elapsed / 10.0f;
-	// wobble -= std::floor(wobble);
+	// Move apples:
+	{
+		std::vector<Apple*> to_delete = std::vector<Apple*>();
+		for (auto &apple_info: apples) {
+			apple_info->life_timer += elapsed;
+			if (apple_info->life_timer > apple_lifetime) {
+				to_delete.push_back(apple_info);
+			}
 
-	// hip->rotation = hip_base_rotation * glm::angleAxis(
-	// 	glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-	// 	glm::vec3(0.0f, 1.0f, 0.0f)
-	// );
-	// upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-	// 	glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-	// 	glm::vec3(0.0f, 0.0f, 1.0f)
-	// );
-	// lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-	// 	glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-	// 	glm::vec3(0.0f, 0.0f, 1.0f)
-	// );
+			apple_info->drawable->transform->position.z = 
+				apple_min_z + (apple_max_z - apple_min_z) * std::sin(apple_info->life_timer * (float(M_PI) / apple_lifetime) + (float(M_PI) / 8));
+		}
 
-	//move sound to follow leg tip position:
-	// song_loop->set_position(get_leg_tip_position(), 1.0f / 60.0f);
+		remove_apples(to_delete);
+	}
 
 	// Move snake:
 	{
@@ -375,12 +417,27 @@ void PlayMode::update(float elapsed) {
 		check_snake_collision();
 	}
 
-	// { //update listener to camera position:
-	// 	glm::mat4x3 frame = camera->transform->make_local_to_parent();
-	// 	glm::vec3 frame_right = frame[0];
-	// 	glm::vec3 frame_at = frame[3];
-	// 	Sound::listener.set_position_right(frame_at, frame_right, 1.0f / 60.0f);
-	// }
+	if (song_loop == nullptr || song_loop->stopped) {
+		//start music loop playing:
+		song_loop = Sound::play_3D(*snake_bop_sample, 0.8f, glm::vec3(0.0f), 10.0f);
+		song_timer = 0;
+	} else {
+	 	song_timer += elapsed;
+	}
+
+	float sec_per_beat = 1.0f / (float)rhythm.bpm * 60;
+	uint32_t new_index = ((uint32_t)floor(song_timer / sec_per_beat)) % rhythm.beat_count;
+	if (new_index != beat_index) {
+		beat_index = new_index;
+		if (rhythm.beats[beat_index]) {
+			spawn_apple();
+		}
+	}
+
+	hunger += hunger_growth_rate * elapsed;
+	if (hunger >= max_hunger) {
+		gameOver = true;
+	}
 
 	//reset button press counters:
 	left.downs = 0;
@@ -397,7 +454,9 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glUseProgram(lit_color_texture_program->program);
 	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
 	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f,-1.0f)));
-	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
+	
+	float hunger_ratio = 1 - (hunger / max_hunger);
+	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, hunger_ratio * 1.0f, hunger_ratio * 0.95f)));
 	glUseProgram(0);
 
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
@@ -419,13 +478,16 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			0.0f, 0.0f, 0.0f, 1.0f
 		));
 
+		std::string display_text = "WASD moves the snake";
+		if (gameOver) display_text = "GAME OVER";
+
 		constexpr float H = 0.09f;
-		lines.draw_text("WASD moves the snake",
+		lines.draw_text(display_text,
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("WASD moves the snake",
+		lines.draw_text(display_text,
 			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));

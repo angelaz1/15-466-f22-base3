@@ -201,11 +201,12 @@ def write_objects(from_collection):
 			write_camera(obj)
 		elif obj.type == 'LIGHT':
 			write_light(obj)
-		elif obj.type == 'EMPTY' and obj.instance_collection:
+		elif obj.type == 'EMPTY': # and obj.instance_collection:
 			write_xfh(obj)
-			instance_parents.append(obj)
-			write_objects(obj.instance_collection)
-			instance_parents.pop()
+			if obj.instance_collection:
+				instance_parents.append(obj)
+				write_objects(obj.instance_collection)
+				instance_parents.pop()
 		else:
 			print('Skipping ' + obj.type)
 	for child in from_collection.children:

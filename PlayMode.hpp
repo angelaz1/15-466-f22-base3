@@ -32,6 +32,8 @@ struct PlayMode : Mode {
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
+	bool gameOver = false;
+
 	// Rhythm representation
 	struct RhythmBeats {
 		std::uint32_t bpm;
@@ -42,11 +44,17 @@ struct PlayMode : Mode {
 	// Rhythm for the current game
 	RhythmBeats rhythm;
 	uint32_t beat_index = 0;
+	float song_timer = 0;
+
+	// Looped song:
+	std::shared_ptr< Sound::PlayingSample > song_loop = nullptr;
 
 	// Model drawables
 	Scene::Drawable *head = nullptr;
 	Scene::Drawable *body = nullptr;
 	Scene::Drawable *apple = nullptr;
+	Scene::Drawable *stem = nullptr;
+	Scene::Drawable *leaf = nullptr;
 
 	Scene::Transform *snake_head = nullptr;
 
@@ -73,13 +81,26 @@ struct PlayMode : Mode {
 
 	float snake_speed = 10;
 
-	std::list<Scene::Drawable*> apples;
+	struct Apple {
+		float life_timer;
+		Scene::Drawable *drawable;
+		Scene::Drawable *stem_drawable;
+		Scene::Drawable *leaf_drawable;
+	};
 
-	// Music coming from the tip of the leg (as a demonstration):
-	std::shared_ptr< Sound::PlayingSample > song_loop;
+	float apple_lifetime = 2.0f;
+	const float apple_max_z = 0.0f;
+	const float apple_min_z = -2.0f;
+	std::list<Apple*> apples;
 	
 	const float min_pos_val = -19;
 	const float max_pos_val = 19;
+
+	// Hunger
+	float hunger = 0.0f;
+	float max_hunger = 10.0f;
+	float hunger_growth_rate = 0.25f;
+	float apple_hunger_restore = 1.0f;
 
 	//camera:
 	Scene::Camera *camera = nullptr;
@@ -94,6 +115,9 @@ struct PlayMode : Mode {
 
 	// Spawn an apple at a random position on the map
 	void spawn_apple();
+
+	// Remove given list of apples
+	void remove_apples(std::vector<Apple*> to_delete);
 
 	// Checks if collision occurs between the two given transforms
 	bool check_collision(Scene::Transform *obj1, Scene::Transform *obj2, float bound);
